@@ -4,6 +4,7 @@ body {
     margin: 0 auto;
     padding: 20px;
     background-color: #f5f5f5;
+    font-size: 16px;
 }
 
 h1 {
@@ -23,6 +24,7 @@ input[type="text"] {
     border: 1px solid #ddd;
     border-radius: 4px;
     width: 300px;
+    font-size: 16px;
 }
 
 button {
@@ -32,10 +34,6 @@ button {
     border: none;
     border-radius: 4px;
     cursor: pointer;
-}
-
-button:hover {
-    background-color: #45a049;
 }
 
 ul {
@@ -70,4 +68,29 @@ li {
 input[type="checkbox"] {
     margin-right: 10px;
     transform: scale(1.2);
+}
+
+.checkbox-button {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #ccc;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: #fff;
+    margin-right: 8px;
+}
+
+.checkbox-button.checked {
+    background: #4CAF50;
+    border-color: #4CAF50;
+}
+
+.checkbox-button:hover {
+    border-color: #999;
 }
