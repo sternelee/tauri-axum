@@ -5,6 +5,11 @@
   "scripts": {
     "copy-pasta": "node scripts/copy-paste-xhr-fetch-proxy.js"
   },
+  "files": [
+    "index.js",
+    "readme.md",
+    "LICENSE.md"
+  ],
   "type": "module",
   "repository": {
     "type": "git",
