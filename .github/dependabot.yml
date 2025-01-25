@@ -6,6 +6,19 @@
 version: 2
 updates:
   - package-ecosystem: "cargo"
-    directory: "/"
+    directory: "/" 
     schedule:
-      interval: "weekly"
+      interval: "daily"
+    open-pull-requests-limit: 10
+  
+  - package-ecosystem: "cargo"
+    directory: "/example/axum-app"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: "cargo"
+    directory: "/example/tauri-app/src-tauri"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
