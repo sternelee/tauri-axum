@@ -1,11 +1,15 @@
 # Tauri Axum HTMX
 
-Create interactive UIs using HTMX and Axum for Tauri applications.
+Build interactive UIs in Tauri applications using HTMX and Axum, enabling server-side rendering patterns by running the Axum app in the Tauri backend.
 
-Typically, Htmx sends requests to the server which returns HTML to the client. In this case,
-the server is the Tauri rust backend running an Axum application. Requests are
-sent over the Tauri FFI bridge to be processed by the Axum application and the
-response is sent back to the webview to be updated by Htmx.
+## Quick Overview
+
+Enables server-side rendering patterns by:
+
+1. Intercepting HTMX requests in the webview
+2. Forwarding them through Tauri's FFI bridge
+3. Processing them with an Axum application running in the Tauri backend
+4. Returning HTML responses back to the webview be rendered by HTMX
 
 Demo and example [source](example):
 
@@ -73,6 +77,3 @@ pub fn run() {
 
 - `initialPath`: The initial path for the application to start on
 - `localAppRequestCommandOverride`: The name of the Tauri command to process requests from the webview
-
-
-
