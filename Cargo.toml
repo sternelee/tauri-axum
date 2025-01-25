@@ -2,6 +2,15 @@
 name = "tauri-axum-htmx"
 version = "0.1.0"
 edition = "2021"
+authors = ["Logan Keenan"] 
+description = "Build interactive UIs in Tauri applications using HTMX and Axum, enabling server-side rendering patterns by running the Axum app in the Tauri backend."
+license = "MIT"
+repository = "https://github.com/logankeenan/tauri-axum-htmx"
+include = [
+    "src/**/*",
+    "readme.md",
+    "LICENSE.md"
+]
 
 [lib]
 path = "src/lib.rs"
