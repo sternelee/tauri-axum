@@ -3,8 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "postinstall": "node scripts/postinstall.js"
+    "copy-pasta": "node scripts/copy-paste-xhr-fetch-proxy.js"
   },
   "type": "module",
   "repository": {
@@ -17,8 +16,8 @@
     "url": "https://github.com/logankeenan/tauri-axum-htmx/issues"
   },
   "homepage": "https://github.com/logankeenan/tauri-axum-htmx#readme",
-  "description": "",
-  "dependencies": {
+  "description": "Build interactive UIs in Tauri applications using HTMX and Axum, enabling server-side rendering patterns by running the Axum app in the Tauri backend.",
+  "devDependencies": {
     "xhr-fetch-proxy": "^1.0.0"
   }
 }
