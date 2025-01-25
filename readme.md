@@ -9,6 +9,10 @@ response is sent back to the webview to be updated by Htmx.
 
 Demo and example [source](example):
 
+
+https://github.com/user-attachments/assets/02923cc7-281c-4271-9f52-02ecee1ac588
+
+
 ## Getting started
 
 Create a vanilla Tauri project and initialize tauri-axum-htmx in src/index.html
