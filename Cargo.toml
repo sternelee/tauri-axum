@@ -1,6 +1,6 @@
 [package]
 name = "tauri-axum-htmx"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Logan Keenan"] 
 description = "Build interactive UIs in Tauri applications using HTMX and Axum, enabling server-side rendering patterns by running the Axum app in the Tauri backend."
