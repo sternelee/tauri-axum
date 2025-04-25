@@ -76,7 +76,7 @@ pub enum Error {
 }
 
 /// Represents an HTTP request that can be processed by an Axum router.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct LocalRequest {
     pub uri: String,
     pub method: String,
