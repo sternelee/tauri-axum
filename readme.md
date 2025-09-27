@@ -83,3 +83,27 @@ pub fn run() {
 
 - `initialPath`: The initial path for the application to start on
 - `localAppRequestCommandOverride`: The name of the Tauri command to process requests from the webview
+
+## SSE (Server-Sent Events) Support
+
+The library now supports Server-Sent Events (SSE) for real-time streaming responses. You can create SSE responses using the `LocalResponse::sse()` method:
+
+```rust
+use tauri_axum_htmx::LocalResponse;
+
+// Create an SSE response
+let sse_data = "data: Hello World\n\ndata: Another message\n\n".as_bytes().to_vec();
+let response = LocalResponse::sse(sse_data);
+```
+
+The library also provides helper functions for formatting SSE messages:
+
+```rust
+// Create SSE messages
+let message = LocalResponse::sse_message("update", "Hello World");
+let comment = LocalResponse::sse_comment("heartbeat");
+let retry = LocalResponse::sse_retry(5000);
+let event_id = LocalResponse::sse_event_id("123");
+```
+
+SSE responses are automatically detected by the `content-type: text/event-stream` header and will be properly flagged with the `is_sse()` method.

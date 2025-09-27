@@ -125,6 +125,8 @@ pub struct LocalResponse {
     pub status_code: u16,
     pub body: Vec<u8>,
     pub headers: HashMap<String, String>,
+    #[serde(skip, default)]
+    pub is_sse: bool,
 }
 
 impl LocalResponse {
@@ -134,7 +136,47 @@ impl LocalResponse {
             status_code: 500,
             body: error_message.into(),
             headers: Default::default(),
+            is_sse: false,
         }
+    }
+
+    pub fn sse(body: Vec<u8>) -> Self {
+        let mut headers = HashMap::new();
+        headers.insert("content-type".to_string(), "text/event-stream".to_string());
+        headers.insert("cache-control".to_string(), "no-cache".to_string());
+        headers.insert("connection".to_string(), "keep-alive".to_string());
+
+        LocalResponse {
+            status_code: 200,
+            body,
+            headers,
+            is_sse: true,
+        }
+    }
+
+    pub fn sse_message(event: &str, data: &str) -> String {
+        let mut message = String::new();
+        if !event.is_empty() {
+            message.push_str(&format!("event: {}\n", event));
+        }
+        message.push_str(&format!("data: {}\n\n", data));
+        message
+    }
+
+    pub fn sse_comment(comment: &str) -> String {
+        format!(": {}\n\n", comment)
+    }
+
+    pub fn sse_retry(retry_ms: u64) -> String {
+        format!("retry: {}\n\n", retry_ms)
+    }
+
+    pub fn sse_event_id(id: &str) -> String {
+        format!("id: {}\n\n", id)
+    }
+
+    pub fn is_sse(&self) -> bool {
+        self.is_sse
     }
 }
 
@@ -142,23 +184,32 @@ impl LocalResponse {
     pub async fn from_response(response: Response) -> Self {
         let code = response.status();
         let response_headers = response.headers().clone();
-        let bytes_result = axum::body::to_bytes(response.into_body(), usize::MAX).await;
 
         let mut headers: HashMap<String, String> = HashMap::new();
         for (key, value) in response_headers.iter() {
             headers.insert(key.to_string(), value.to_str().unwrap().to_string());
         }
 
+        // Check if this is an SSE response
+        let is_sse = headers
+            .get("content-type")
+            .map(|ct| ct.contains("text/event-stream"))
+            .unwrap_or(false);
+
+        let bytes_result = axum::body::to_bytes(response.into_body(), usize::MAX).await;
+
         match bytes_result {
             Ok(data) => LocalResponse {
                 status_code: code.as_u16(),
                 body: data.to_vec(),
                 headers,
+                is_sse,
             },
             Err(_) => LocalResponse {
                 status_code: code.as_u16(),
                 body: Vec::new(),
                 headers: headers.clone(),
+                is_sse,
             },
         }
     }
@@ -302,6 +353,72 @@ mod tests {
                 .unwrap()
                 .contains(error_message));
             assert!(response.headers.is_empty());
+        }
+
+        #[test]
+        fn test_sse_response_creation() {
+            let body = "data: test message\n\n".as_bytes().to_vec();
+            let sse_response = LocalResponse::sse(body);
+
+            assert_eq!(sse_response.status_code, 200);
+            assert!(!sse_response.body.is_empty());
+            assert_eq!(
+                sse_response.headers.get("content-type").unwrap(),
+                "text/event-stream"
+            );
+            assert_eq!(
+                sse_response.headers.get("cache-control").unwrap(),
+                "no-cache"
+            );
+            assert_eq!(
+                sse_response.headers.get("connection").unwrap(),
+                "keep-alive"
+            );
+            assert!(sse_response.is_sse());
+        }
+
+        #[tokio::test]
+        async fn test_sse_response_from_axum_response() {
+            let response = Builder::new()
+                .status(200)
+                .header("content-type", "text/event-stream")
+                .body(Body::from("data: test message\n\n"))
+                .unwrap();
+
+            let local_response = LocalResponse::from_response(response).await;
+            assert_eq!(local_response.status_code, 200);
+            assert!(local_response.is_sse());
+            assert_eq!(
+                local_response.headers.get("content-type").unwrap(),
+                "text/event-stream"
+            );
+        }
+
+        #[test]
+        fn test_sse_message_formatting() {
+            let message = LocalResponse::sse_message("update", "Hello World");
+            assert_eq!(message, "event: update\ndata: Hello World\n\n");
+
+            let message_no_event = LocalResponse::sse_message("", "Hello World");
+            assert_eq!(message_no_event, "data: Hello World\n\n");
+        }
+
+        #[test]
+        fn test_sse_comment_formatting() {
+            let comment = LocalResponse::sse_comment("heartbeat");
+            assert_eq!(comment, ": heartbeat\n\n");
+        }
+
+        #[test]
+        fn test_sse_retry_formatting() {
+            let retry = LocalResponse::sse_retry(5000);
+            assert_eq!(retry, "retry: 5000\n\n");
+        }
+
+        #[test]
+        fn test_sse_event_id_formatting() {
+            let event_id = LocalResponse::sse_event_id("123");
+            assert_eq!(event_id, "id: 123\n\n");
         }
     }
 
