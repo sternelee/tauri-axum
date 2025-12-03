@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is **tauri-axum-htmx**, a library that enables server-side rendering patterns in Tauri applications by using HTMX and Axum. The library intercepts HTMX requests in the webview, forwards them through Tauri's FFI bridge, processes them with an Axum application running in the Tauri backend, and returns HTML responses back to the webview.
+This is **tauri-axum**, a library that enables server-side rendering patterns in Tauri applications by using Axum. The library intercepts HTTP requests in the webview, forwards them through Tauri's FFI bridge, processes them with an Axum application running in the Tauri backend, and returns responses back to the webview.
 
 ## Key Commands
 
@@ -50,7 +50,7 @@ The repository contains two example applications:
 ### Key Patterns
 
 1. **Request Processing Flow**:
-   - HTMX requests are intercepted in the webview
+   - HTTP requests are intercepted in the webview
    - Requests are serialized and sent through Tauri's FFI bridge
    - `LocalRequest::send_to_router()` converts the request to Axum format
    - Axum router processes the request

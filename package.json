@@ -1,5 +1,5 @@
 {
-  "name": "tauri-axum-htmx",
+  "name": "tauri-axum",
   "version": "1.0.1",
   "main": "index.js",
   "scripts": {
@@ -13,15 +13,15 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/logankeenan/tauri-axum-htmx.git"
+    "url": "git+https://github.com/sternelee/tauri-axum.git"
   },
   "author": "Logan Keenan",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/logankeenan/tauri-axum-htmx/issues"
+    "url": "https://github.com/sternelee/tauri-axum/issues"
   },
-  "homepage": "https://github.com/logankeenan/tauri-axum-htmx#readme",
-  "description": "Build interactive UIs in Tauri applications using HTMX and Axum, enabling server-side rendering patterns by running the Axum app in the Tauri backend.",
+  "homepage": "https://github.com/sternelee/tauri-axum#readme",
+  "description": "Build interactive UIs in Tauri applications using Axum, enabling server-side rendering patterns by running the Axum app in the Tauri backend.",
   "devDependencies": {
     "xhr-fetch-proxy": "^1.0.0"
   }

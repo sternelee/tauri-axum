@@ -1,37 +1,23 @@
-//! # Tauri Axum HTMX
-//! A library for creating interactive UIs using HTMX and Axum within Tauri applications.
-//! This crate provides the necessary infrastructure to handle HTMX requests through
+//! # Tauri Axum
+//! A library for running Axum web applications within Tauri applications.
+//! This crate provides the necessary infrastructure to handle HTTP requests through
 //! Tauri's FFI bridge, process them using an Axum application, and return responses
 //! back to the webview.
 //! ## Overview
-//! In a typical HTMX application, requests are sent to a server which returns HTML to
-//! the client. This crate enables this pattern within Tauri applications by:
-//! - Intercepting HTMX requests in the webview
+//! This crate enables server-side rendering patterns within Tauri applications by:
+//! - Intercepting HTTP requests in the webview
 //! - Forwarding them through Tauri's FFI bridge
 //! - Processing them with an Axum application running in the Tauri backend
-//! - Returning the response back to be handled by HTMX in the webview
+//! - Returning the response back to be handled by the frontend framework
 //! ## Quick Start
-//! 1. First, initialize the client-side integration in your HTML:
-//! ```html
-//! <!doctype html>
-//! <html lang="en">
-//!   <head>
-//!     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-//!     <script type="module">
-//!       import { initialize } from "https://unpkg.com/tauri-axum-htmx";
-//!
-//!       initialize("/"); // the initial path for the application to start on
-//!     </script>
-//!   </head>
-//! </html>
-//! ```
+//! 1. Set up your frontend to make HTTP requests to Tauri commands instead of external servers.
 //! 2. Then, set up the Tauri command to handle requests:
 //! ```rust,no_run
 //! use std::sync::Arc;
 //! use tokio::sync::Mutex;
 //! use axum::{Router, routing::get};
-//! use tauri::State;
-//! use tauri_axum_htmx::{LocalRequest, LocalResponse};
+//! use tauri::{State, Window};
+//! use tauri_axum::{LocalRequest, LocalResponse};
 //! struct TauriState {
 //!     router: Arc<Mutex<Router>>,
 //! }
@@ -44,15 +30,39 @@
 //!     let response = local_request.send_to_router(&mut router).await;
 //!     Ok(response)
 //! }
+//!
+//! #[cfg(feature = "streaming")]
+//! #[tauri::command]
+//! async fn local_app_request_streaming(
+//!     window: Window,
+//!     state: State<'_, TauriState>,
+//!     local_request: LocalRequest,
+//! ) -> Result<tauri_axum::StreamResponse, String> {
+//!     let mut router = state.router.lock().await;
+//!     let response = local_request
+//!         .send_to_router_streaming(&mut router, window, "sse-response")
+//!         .await
+//!         .map_err(|e| e.to_string())?;
+//!     Ok(response)
+//! }
 //! fn main() {
 //!     let app = Router::new()
 //!         .route("/", get(|| async { "Hello, World!" }));
 //!     let tauri_state = TauriState {
 //!         router: Arc::new(Mutex::new(app)),
 //!     };
-//!     tauri::Builder::default()
+//!
+//!     let mut builder = tauri::Builder::default()
 //!         .manage(tauri_state)
 //!         .invoke_handler(tauri::generate_handler![local_app_request]);
+//!
+//!     #[cfg(feature = "streaming")]
+//!     {
+//!         builder = builder.invoke_handler(tauri::generate_handler![local_app_request, local_app_request_streaming]);
+//!     }
+//!
+//!     // Continue with your Tauri app setup...
+//!     // builder.run(tauri::generate_context!()).expect("error while running tauri application");
 //! }
 //! ```
 
@@ -65,6 +75,35 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use thiserror::Error;
 use tower_service::Service;
+
+#[cfg(feature = "streaming")]
+use std::sync::atomic::{AtomicU32, Ordering};
+
+#[cfg(feature = "streaming")]
+static REQUEST_COUNTER: AtomicU32 = AtomicU32::new(0);
+
+#[cfg(feature = "streaming")]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StreamResponse {
+    pub request_id: u32,
+    pub status: u16,
+    pub status_text: String,
+    pub headers: HashMap<String, String>,
+}
+
+#[cfg(feature = "streaming")]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct EndPayload {
+    pub request_id: u32,
+    pub status: u16,
+}
+
+#[cfg(feature = "streaming")]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct ChunkPayload {
+    pub request_id: u32,
+    pub chunk: Vec<u8>,
+}
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -92,6 +131,183 @@ impl LocalRequest {
                 Err(error) => LocalResponse::internal_server_error(error),
             },
             Err(error) => LocalResponse::internal_server_error(error),
+        }
+    }
+
+    /// Send request to router and stream SSE response via Tauri events
+    #[cfg(feature = "streaming")]
+    pub async fn send_to_router_streaming<W>(
+        self,
+        router: &mut Router,
+        window: W,
+        event_name: &str,
+    ) -> Result<StreamResponse, Box<dyn std::error::Error + Send + Sync>>
+    where
+        W: tauri::Manager<tauri::Wry> + Clone + tauri::Emitter<tauri::Wry> + Send + 'static,
+    {
+        let request_id = REQUEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+
+        match self.to_axum_request() {
+            Ok(request) => match router.call(request).await {
+                Ok(response) => {
+                    let status = response.status().as_u16();
+                    let mut headers = HashMap::new();
+
+                    for (key, value) in response.headers().iter() {
+                        headers.insert(key.to_string(), value.to_str().unwrap_or("").to_string());
+                    }
+
+                    // Check if this is an SSE response
+                    let is_sse = headers
+                        .get("content-type")
+                        .map(|ct| ct.contains("text/event-stream"))
+                        .unwrap_or(false);
+
+                    if is_sse {
+                        // Stream SSE data via events
+                        let window_clone = window.clone();
+                        let event_name = event_name.to_string();
+
+                        tauri::async_runtime::spawn(async move {
+                            let bytes_result =
+                                axum::body::to_bytes(response.into_body(), usize::MAX).await;
+
+                            match bytes_result {
+                                Ok(data) => {
+                                    // Send the complete SSE data as chunks
+                                    let sse_data = String::from_utf8_lossy(&data);
+                                    for line in sse_data.lines() {
+                                        if !line.trim().is_empty() {
+                                            if let Err(e) = window_clone.emit(
+                                                &event_name,
+                                                ChunkPayload {
+                                                    request_id,
+                                                    chunk: format!("{}\n", line).into_bytes(),
+                                                },
+                                            ) {
+                                                eprintln!("Failed to emit SSE chunk: {}", e);
+                                            }
+                                        }
+                                    }
+                                }
+                                Err(err) => {
+                                    eprintln!("Error reading SSE response body: {}", err);
+                                }
+                            }
+
+                            // Send end payload
+                            if let Err(e) =
+                                window_clone.emit(&event_name, EndPayload { request_id, status })
+                            {
+                                eprintln!("Failed to emit SSE end payload: {}", e);
+                            }
+                        });
+                    } else {
+                        // For non-SSE responses, just send the complete body as one chunk
+                        let window_clone = window.clone();
+                        let event_name = event_name.to_string();
+
+                        tauri::async_runtime::spawn(async move {
+                            let bytes_result =
+                                axum::body::to_bytes(response.into_body(), usize::MAX).await;
+
+                            match bytes_result {
+                                Ok(data) => {
+                                    if let Err(e) = window_clone.emit(
+                                        &event_name,
+                                        ChunkPayload {
+                                            request_id,
+                                            chunk: data.to_vec(),
+                                        },
+                                    ) {
+                                        eprintln!("Failed to emit response chunk: {}", e);
+                                    }
+                                }
+                                Err(err) => {
+                                    eprintln!("Error reading response body: {}", err);
+                                }
+                            }
+
+                            if let Err(e) =
+                                window_clone.emit(&event_name, EndPayload { request_id, status })
+                            {
+                                eprintln!("Failed to emit response end payload: {}", e);
+                            }
+                        });
+                    }
+
+                    Ok(StreamResponse {
+                        request_id,
+                        status,
+                        status_text: "OK".to_string(),
+                        headers,
+                    })
+                }
+                Err(error) => {
+                    let error_msg = format!("Router error: {}", error);
+
+                    // Emit error as chunk
+                    if let Err(e) = window.emit(
+                        event_name,
+                        ChunkPayload {
+                            request_id,
+                            chunk: error_msg.as_bytes().to_vec(),
+                        },
+                    ) {
+                        eprintln!("Failed to emit error chunk: {}", e);
+                    }
+
+                    // Emit end payload
+                    if let Err(e) = window.emit(
+                        event_name,
+                        EndPayload {
+                            request_id,
+                            status: 500,
+                        },
+                    ) {
+                        eprintln!("Failed to emit error end payload: {}", e);
+                    }
+
+                    Ok(StreamResponse {
+                        request_id,
+                        status: 500,
+                        status_text: "Router Error".to_string(),
+                        headers: HashMap::new(),
+                    })
+                }
+            },
+            Err(error) => {
+                let error_msg = format!("Request conversion error: {}", error);
+
+                // Emit error as chunk
+                if let Err(e) = window.emit(
+                    event_name,
+                    ChunkPayload {
+                        request_id,
+                        chunk: error_msg.as_bytes().to_vec(),
+                    },
+                ) {
+                    eprintln!("Failed to emit conversion error chunk: {}", e);
+                }
+
+                // Emit end payload
+                if let Err(e) = window.emit(
+                    event_name,
+                    EndPayload {
+                        request_id,
+                        status: 400,
+                    },
+                ) {
+                    eprintln!("Failed to emit conversion error end payload: {}", e);
+                }
+
+                Ok(StreamResponse {
+                    request_id,
+                    status: 400,
+                    status_text: "Request Error".to_string(),
+                    headers: HashMap::new(),
+                })
+            }
         }
     }
 
@@ -451,6 +667,118 @@ mod tests {
             };
 
             assert!(request.to_axum_request().is_ok());
+        }
+    }
+
+    #[cfg(feature = "streaming")]
+    mod streaming_tests {
+        use super::*;
+
+        #[tokio::test]
+        async fn test_stream_response_structure() {
+            let response = StreamResponse {
+                request_id: 42,
+                status: 200,
+                status_text: "OK".to_string(),
+                headers: HashMap::new(),
+            };
+
+            assert_eq!(response.request_id, 42);
+            assert_eq!(response.status, 200);
+            assert_eq!(response.status_text, "OK");
+            assert!(response.headers.is_empty());
+        }
+
+        #[tokio::test]
+        async fn test_chunk_payload_structure() {
+            let chunk = vec![1, 2, 3, 4];
+            let payload = ChunkPayload {
+                request_id: 123,
+                chunk: chunk.clone(),
+            };
+
+            assert_eq!(payload.request_id, 123);
+            assert_eq!(payload.chunk, chunk);
+        }
+
+        #[tokio::test]
+        async fn test_end_payload_structure() {
+            let payload = EndPayload {
+                request_id: 456,
+                status: 200,
+            };
+
+            assert_eq!(payload.request_id, 456);
+            assert_eq!(payload.status, 200);
+        }
+
+        #[tokio::test]
+        async fn test_request_counter_increment() {
+            let initial_counter = REQUEST_COUNTER.load(Ordering::SeqCst);
+
+            // Simulate multiple requests
+            for _ in 0..5 {
+                REQUEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+            }
+
+            let new_counter = REQUEST_COUNTER.load(Ordering::SeqCst);
+            assert!(new_counter > initial_counter);
+            assert_eq!(new_counter, initial_counter + 5);
+        }
+
+        #[tokio::test]
+        async fn test_sse_detection() {
+            let mut headers = HashMap::new();
+            headers.insert("content-type".to_string(), "text/event-stream".to_string());
+
+            let is_sse = headers
+                .get("content-type")
+                .map(|ct| ct.contains("text/event-stream"))
+                .unwrap_or(false);
+
+            assert!(is_sse);
+
+            // Test non-SSE content type
+            headers.insert("content-type".to_string(), "application/json".to_string());
+            let is_not_sse = headers
+                .get("content-type")
+                .map(|ct| ct.contains("text/event-stream"))
+                .unwrap_or(false);
+
+            assert!(!is_not_sse);
+        }
+
+        #[test]
+        fn test_stream_response_serialization() {
+            let response = StreamResponse {
+                request_id: 123,
+                status: 200,
+                status_text: "OK".to_string(),
+                headers: HashMap::new(),
+            };
+
+            // Test that it can be serialized
+            let json = serde_json::to_string(&response).unwrap();
+            let parsed: StreamResponse = serde_json::from_str(&json).unwrap();
+
+            assert_eq!(parsed.request_id, response.request_id);
+            assert_eq!(parsed.status, response.status);
+            assert_eq!(parsed.status_text, response.status_text);
+        }
+
+        #[test]
+        fn test_chunk_payload_serialization() {
+            let payload = ChunkPayload {
+                request_id: 456,
+                chunk: vec![72, 101, 108, 108, 111], // "Hello" in bytes
+            };
+
+            // Test that it can be serialized
+            let json = serde_json::to_string(&payload).unwrap();
+            let parsed: ChunkPayload = serde_json::from_str(&json).unwrap();
+
+            assert_eq!(parsed.request_id, payload.request_id);
+            assert_eq!(parsed.chunk, payload.chunk);
         }
     }
 }

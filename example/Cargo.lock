@@ -3353,14 +3353,14 @@ dependencies = [
  "serde",
  "serde_json",
  "tauri",
- "tauri-axum-htmx",
+ "tauri-axum",
  "tauri-build",
  "tauri-plugin-shell",
  "tower-service",
 ]
 
 [[package]]
-name = "tauri-axum-htmx"
+name = "tauri-axum"
 version = "0.1.0"
 dependencies = [
  "axum",

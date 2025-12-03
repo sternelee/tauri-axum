@@ -1,11 +1,11 @@
 [package]
-name = "tauri-axum-htmx"
+name = "tauri-axum"
 version = "0.1.1"
 edition = "2021"
-authors = ["Logan Keenan"] 
-description = "Build interactive UIs in Tauri applications using HTMX and Axum, enabling server-side rendering patterns by running the Axum app in the Tauri backend."
+authors = ["Logan Keenan"]
+description = "Run Axum web applications within Tauri, enabling server-side rendering patterns by running the Axum app in the Tauri backend."
 license = "MIT"
-repository = "https://github.com/logankeenan/tauri-axum-htmx"
+repository = "https://github.com/sternelee/tauri-axum"
 include = [
     "src/**/*",
     "readme.md",
@@ -23,6 +23,11 @@ tower-service = "0.3.3"
 futures = "0.3"
 tokio = { version = "1.47", features = ["sync", "rt", "macros"] }
 tokio-stream = "0.1"
+tauri = { version = "2", optional = true }
+
+[features]
+default = []
+streaming = ["tauri"]
 
 [dev-dependencies]
 tokio = { version = "1.47", features = ["full"] }

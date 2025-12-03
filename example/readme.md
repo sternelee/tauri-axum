@@ -1,4 +1,4 @@
-Tauri Axum Htmx Example
+Tauri Axum Example
 
 ## Pre-requisites
 
